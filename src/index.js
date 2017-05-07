@@ -7,12 +7,6 @@
 
 let toString = Object.prototype.toString;
 
-let uid = (() => {
-    let counter = 0;
-
-    return () => ++counter;
-})();
-
 let knownActionTypes = {
     rollback: '@@optimistic/ROLLBACK',
     mark: '@@optimistic/MARK'
@@ -40,9 +34,9 @@ export let createOptimisticManager = ({dispatch, getState}) => {
     // All plain object actions dispatched after save point
     let dispatchedActions = [];
 
-    let saveActionOnDemand = (value, optimistic, transactionId) => {
+    let saveActionOnDemand = (value, transactionId) => {
         if (savePoint) {
-            dispatchedActions.push({value, optimistic, transactionId});
+            dispatchedActions.push({value, transactionId});
         }
     };
 
@@ -52,82 +46,78 @@ export let createOptimisticManager = ({dispatch, getState}) => {
         }
     };
 
-    let rollback = (transactionId, replay) => {
+    let createSavePointOnDemand = () => {
         if (!savePoint) {
-            return;
+            savePoint = getState();
         }
-
-        // Force state to match save point
-        dispatch({type: knownActionTypes.rollback, payload: savePoint});
-
-        let newSavePoint = null;
-        let newDispatchedActions = [];
-
-        // Because we will dispatch previously saved actions, make a copy here to prevent infinite loops
-        for (let savedAction of dispatchedActions.slice()) {
-            // Ignore all optimistic actions produced by the same transaction
-            if (savedAction.transactionId === transactionId && savedAction.optimistic) {
-                continue;
-            }
-
-            // The next save point should be the first time an optimistic action is dispatched,
-            // so any actions earlier than new save point should be safe to discard
-            if (!newSavePoint && savedAction.optimistic) {
-                newSavePoint = getState();
-            }
-
-            if (newSavePoint) {
-                newDispatchedActions.push(savedAction);
-            }
-
-            // Still mark state to optimistic if an optimistic action occurs
-            if (savedAction.optimistic && !getState().optimistic) {
-                dispatch({type: knownActionTypes.mark});
-            }
-
-            // Apply remaining action to make state up to time,
-            // here we just need to apply all middlewares **after** redux-optimistic-manager,
-            // so use `next` instead of global `dispatch`
-            replay(savedAction.value);
-        }
-
-        savePoint = newSavePoint;
-        dispatchedActions = newDispatchedActions;
     };
 
-    return replay => {
-        let transactionId = uid();
-
-        return {
-            postAction(action) {
-                if (isPlainAction(action)) {
-                    saveActionOnDemand(action, false, transactionId);
-                }
-            },
-
-            postOptimisticAction(action) {
-                if (!isPlainAction(action)) {
-                    return;
-                }
-
-                if (!savePoint) {
-                    savePoint = getState();
-                }
-
-                saveActionOnDemand(action, true, transactionId);
-                markStateOptimisticOnDemand();
-            },
-
-            postExternalAction(action) {
-                if (isPlainAction(action)) {
-                    saveActionOnDemand(action, false, null);
-                }
-            },
-
-            rollback() {
-                rollback(transactionId, replay);
+    return {
+        postAction(action, transactionId) {
+            if (!isPlainAction(action)) {
+                return action;
             }
-        };
+
+            if (transactionId == null) {
+                saveActionOnDemand(action);
+            }
+            else {
+                createSavePointOnDemand();
+                saveActionOnDemand(action, transactionId);
+                markStateOptimisticOnDemand();
+            }
+
+            return action;
+        },
+
+        rollback(transactionId, replay = dispatch) {
+            if (transactionId == null) {
+                throw new Error('rollback requires a transaction id');
+            }
+
+            if (!savePoint) {
+                return;
+            }
+
+            // Force state to match save point
+            dispatch({type: knownActionTypes.rollback, payload: savePoint});
+
+            let newSavePoint = null;
+            let newDispatchedActions = [];
+
+            // Because we will dispatch previously saved actions, make a copy here to prevent infinite loops
+            for (let savedAction of dispatchedActions.slice()) {
+                // Ignore all optimistic actions produced by the same transaction
+                if (savedAction.transactionId === transactionId) {
+                    continue;
+                }
+
+                let isOptimisticAction = savedAction.transactionId != null;
+
+                // The next save point should be the first time an optimistic action is dispatched,
+                // so any actions earlier than new save point should be safe to discard
+                if (!newSavePoint && isOptimisticAction) {
+                    newSavePoint = getState();
+                }
+
+                if (newSavePoint) {
+                    newDispatchedActions.push(savedAction);
+                }
+
+                // Still mark state to optimistic if an optimistic action occurs
+                if (isOptimisticAction && !getState().optimistic) {
+                    dispatch({type: knownActionTypes.mark});
+                }
+
+                // Apply remaining action to make state up to time,
+                // here we just need to apply all middlewares **after** redux-optimistic-manager,
+                // so use `next` instead of global `dispatch`
+                replay(savedAction.value);
+            }
+
+            savePoint = newSavePoint;
+            dispatchedActions = newDispatchedActions;
+        }
     };
 };
 

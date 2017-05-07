@@ -28,111 +28,120 @@ describe('createOptimisticManager', () => {
         expect(typeof createOptimisticManager).to.equal('function');
     });
 
-    it('should return a function', () => {
-        expect(typeof createOptimisticManager(createStore())).to.equal('function');
+    it('should return postAction and rollback function', () => {
+        let store = createStore();
+        let {postAction, rollback} = createOptimisticManager(store);
+        expect(typeof postAction).to.equal('function');
+        expect(typeof rollback).to.equal('function');
     });
 
-    it('should provide action post and rollback functions in a transaction', () => {
+    it('should return the input action for postAction function', () => {
         let store = createStore();
-        let replay = () => {};
-        let transaction = createOptimisticManager(store)(replay);
-        expect(typeof transaction.postAction).to.equal('function');
-        expect(typeof transaction.postOptimisticAction).to.equal('function');
-        expect(typeof transaction.postExternalAction).to.equal('function');
-        expect(typeof transaction.rollback).to.equal('function');
+        let postAction = createOptimisticManager(store).postAction;
+        let action = {};
+        expect(postAction(action)).to.equal(action);
+        let thunk = () => {};
+        expect(postAction(thunk)).to.equal(thunk);
+    });
+
+    it('should throw when no transactionId is provided to rollback function', () => {
+        let store = createStore();
+        let rollback = createOptimisticManager(store).rollback;
+        expect(rollback).to.throw();
     });
 
     it('should set state to the one before the first optimistic action when rollback', () => {
         let store = createStore();
-        let {postAction, postOptimisticAction, postExternalAction, rollback} = createOptimisticManager(store)(store.dispatch);
+        let transactionId = 1;
+        let {postAction, rollback} = createOptimisticManager(store);
         store.setState(0);
         postAction({});
         store.setState(1);
-        postExternalAction({});
+        postAction({}, transactionId);
         store.setState(2);
-        postOptimisticAction({});
-        store.setState(3);
-        rollback();
-        expect(store.actions.find(item => item.type === '@@optimistic/ROLLBACK').payload).to.equal(2);
+        rollback(transactionId, store.dispatch);
+        expect(store.actions.find(item => item.type === '@@optimistic/ROLLBACK').payload).to.equal(1);
     });
 
-    it('should replay non-optimistic actions in the same trasaction after rollback', () => {
+    it('should replay non-optimistic actions after rollback', () => {
         let store = createStore();
+        let transactionId = 1;
         let replay = sinon.spy();
-        let {postAction, postOptimisticAction, postExternalAction, rollback} = createOptimisticManager(store)(replay);
+        let {postAction, rollback} = createOptimisticManager(store);
         let optimisticAction = {};
         let actualAction = {};
-        postOptimisticAction(optimisticAction);
+        postAction(optimisticAction, transactionId);
         postAction(actualAction);
-        rollback();
+        rollback(transactionId, replay);
         expect(replay.called).to.equal(true);
-        expect(replay.getCall(0).args[0]).to.equal(actualAction);
-    });
-
-    it('should replay external actions in the same trasaction after rollback', () => {
-        let store = createStore();
-        let replay = sinon.spy();
-        let {postAction, postOptimisticAction, postExternalAction, rollback} = createOptimisticManager(store)(replay);
-        let optimisticAction = {};
-        let externalAction = {};
-        postOptimisticAction(optimisticAction);
-        postExternalAction(externalAction);
-        rollback();
-        expect(replay.called).to.equal(true);
-        expect(replay.getCall(0).args[0]).to.equal(externalAction);
+        expect(replay.firstCall.args[0]).to.equal(actualAction);
     });
 
     it('should replay optimistic actions in other transactions after rollback', () => {
         let store = createStore();
         let replay = sinon.spy();
-        let transaction = createOptimisticManager(store);
-        let first = transaction(replay);
-        let second = transaction(replay);
+        let {postAction, rollback} = createOptimisticManager(store);
         let firstAction = {};
         let secondAction = {};
-        first.postOptimisticAction(firstAction);
-        second.postOptimisticAction(secondAction);
-        second.rollback();
+        let thirdAction = {};
+        postAction(firstAction, 1);
+        postAction(secondAction, 2);
+        postAction(thirdAction, 3);
+        rollback(2, replay);
         expect(replay.called).to.equal(true);
-        expect(replay.getCall(0).args[0]).to.equal(firstAction);
+        expect(replay.firstCall.args[0]).to.equal(firstAction);
+        expect(replay.secondCall.args[0]).to.equal(thirdAction);
     });
 
     it('should not replay any action if no optimistic action dispatched', () => {
         let store = createStore();
         let replay = sinon.spy();
-        let {postAction, postExternalAction, rollback} = createOptimisticManager(store)(replay);
+        let {postAction, rollback} = createOptimisticManager(store);
         postAction({});
-        postExternalAction({});
-        rollback();
+        rollback(1, replay);
         expect(replay.called).to.equal(false);
     });
 
     it('should not replay non-plain actions', () => {
         let store = createStore();
         let replay = sinon.spy();
-        let {postAction, postOptimisticAction, postExternalAction, rollback} = createOptimisticManager(store)(replay);
+        let {postAction, rollback} = createOptimisticManager(store);
         postAction(1);
-        postOptimisticAction(() => {});
-        postExternalAction([]);
-        rollback();
+        postAction(() => {});
+        postAction([]);
+        rollback(1, replay);
         expect(replay.called).to.equal(false);
+    });
+
+    it('should use dispatch as default replay function', () => {
+        let store = createStore();
+        sinon.spy(store, 'dispatch');
+        let transactionId = 1;
+        let {postAction, rollback} = createOptimisticManager(store);
+        let optimisticAction = {};
+        let actualAction = {};
+        postAction(optimisticAction, transactionId);
+        postAction(actualAction);
+        rollback(transactionId);
+        expect(store.dispatch.called).to.equal(true);
+        expect(store.dispatch.lastCall.args[0]).to.equal(actualAction);
     });
 
     it('should mark state as optimistic when the first optimistic action arrives', () => {
         let store = createStore();
         let replay = sinon.spy();
-        let {postOptimisticAction} = createOptimisticManager(store)(replay);
-        postOptimisticAction({});
-        expect(store.actions.find(item => item.type === '@@optimistic/MARK')).to.not.equal(undefined);
+        let postAction = createOptimisticManager(store).postAction;
+        postAction({}, 1);
+        expect(store.actions.some(item => item.type === '@@optimistic/MARK')).to.not.equal(false);
     });
 
     it('should not dispatch mark action if state is already optimistic', () => {
         let store = createStore();
         let replay = sinon.spy();
-        let {postOptimisticAction} = createOptimisticManager(store)(replay);
+        let postAction = createOptimisticManager(store).postAction;
         store.setState({optimistic: true});
-        postOptimisticAction({});
-        expect(store.actions.find(item => item.type === '@@optimistic/MARK')).to.equal(undefined);
+        postAction({}, 1);
+        expect(store.actions.some(item => item.type === '@@optimistic/MARK')).to.equal(false);
     });
 });
 
@@ -179,8 +188,8 @@ describe('createOptimisticReducer', () => {
         let reducer = createOptimisticReducer(nextReducer);
         let value = reducer(state, action);
         expect(nextReducer.called).to.equal(true);
-        expect(nextReducer.getCall(0).args[0]).to.equal(state);
-        expect(nextReducer.getCall(0).args[1]).to.equal(action);
+        expect(nextReducer.firstCall.args[0]).to.equal(state);
+        expect(nextReducer.firstCall.args[1]).to.equal(action);
     });
 
     it('should call next reducer on initialization', () => {
@@ -190,7 +199,7 @@ describe('createOptimisticReducer', () => {
         let reducer = createOptimisticReducer(nextReducer);
         let value = reducer(state, action);
         expect(nextReducer.called).to.equal(true);
-        expect(nextReducer.getCall(0).args[0]).to.deep.equal({optimistic: false, x: 1});
-        expect(nextReducer.getCall(0).args[1]).to.equal(action);
+        expect(nextReducer.firstCall.args[0]).to.deep.equal({optimistic: false, x: 1});
+        expect(nextReducer.firstCall.args[1]).to.equal(action);
     })
 });

@@ -15,7 +15,7 @@ Using redux-optimistic-manager is simple.
     npm install --save redux-optimistic-manager
     ```
 
-2. Wrap your reducer with `createOptimisticReducer` higher order function, then create a manager for your store, the `createOptimisticManager` returns a `transaction` function:
+2. Wrap your reducer with `createOptimisticReducer` higher order function, then create a manager for your store, the `createOptimisticManager` returns `postAction` and `rollback` function:
 
     ```javascript
     // store.js
@@ -24,23 +24,13 @@ Using redux-optimistic-manager is simple.
     import reducer from './reducer';
 
     export let store = createStore(createOptimisticReducer(reducer));
-    export let transaction = createOptimisticManager(store);
+    export let {postAction, rollback} = createOptimisticManager(store);
     ```
 
-3. Begin a transaction before your business logic, a transaction simply gives you 4 functions:
+    - `postAction(action, [transactionId])` tells transaction to save a action, if `transactionId` is provided then the action is treated as optimistic, `transactionId` can be any unique value except `null` and `undefined`, we recommend using an new object(`{}`) as transaction id. The `postAction` function returns whatever you provide as `action` argument.
+    - `rollback(transactionId, [replay = store.dispatch])` is to rollback all optimistic actions in certain transaction, you can provide an extra `replay` function to `rollback`, all saved actions will be dispatch through `replay` function.
 
-    ```javascript
-    import {transaction} from './store';
-
-    let {postAction, postOptimisticAction, postExternalAction, rollback} = transaction();
-    ```
-
-    - `postAction(action)` tells transaction to save a simple action.
-    - `postOptimisticAction(action)` tells transaction to save a optimistic action which should be dismissed back when this transaction rolls back.
-    - `postExternalAction(action)` is to save an action which does not belong to this transaction, this is designed for 3rd-party middlewares.
-    - `rollback()` is to rollback all optimistic actions in this transaction.
-
-4. Before you dispatch any action, call `postAction` or `postOptimisticAction` to save it in transaction, you can rollback optimistic ones by calling `rollback()`:
+4. Create a `transactionId` in your business logic, before you dispatch any action, call `postAction` to save it in transaction, you can rollback optimistic ones by calling `rollback(transactionId)`:
 
     ```javascript
     let newTodo = todo => ({type: 'NEW_TODO', payload: todo});
@@ -49,30 +39,32 @@ Using redux-optimistic-manager is simple.
 
     let saveTodo = async todo => {
         // Begin a transaction
-        let {postAction, postOptimisticAction, rollback} = transaction();
+        let transactionId = {};
 
         // Actual action will be saved and re-dispatched on rollback
-        let notifyAction = notify('Saving todo');
-        postAction(notify);
-        dispatch(notify);
+        postAction(postAction(notify('Saving todo')));
 
         let newTodoAction = newTodo(todo);
         // Save and dispatch an optimistic action, this action will be dismissed on rollback
-        postOptimisticAction(newTodoAction);
-        dispatch(newTodoAction);
+        dispatch(postAction(newTodo(todo)), transactionId);
 
         let createdTodo = await service.post('/todos', todo);
 
         // Rollback to dismiss all optimistic actions
-        rollback();
+        rollback(transactionId);
 
         // Dispatch final actual action, this should also be saved
-        let finalAction = newTodo(createdTodo0;
-        postAction(finalAction);
-        dispatch(finalAction);
+        dispatch(postAction(newTodo(createdTodo)));
     };
     ```
 
 ## Integrate with middleware
 
 [redux-optimistic-thunk](https://github.com/ecomfe/redux-optimistic-thunk) is an optimistic middleware based on this lib, [the code](https://github.com/ecomfe/redux-optimistic-thunk/blob/master/src/index.js) is quite easy to read.
+
+## Change Log
+
+### 2.0.0
+
+- Simplified interfaces, now we need only `postAction` and `rollback` functions.
+- No longer manage transaction id, you should provide an unique `transactionId` to `postAction` and `rollback` function.

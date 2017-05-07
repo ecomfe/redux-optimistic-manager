@@ -34,73 +34,49 @@ let store = createStore(
     applyMiddleware(logger)
 );
 let dispatch = store.dispatch;
-let transaction = createOptimisticManager(store);
+let {postAction, rollback} = createOptimisticManager(store);
 
 let delay = time => new Promise(resolve => setTimeout(resolve, time));
 
 let main = async () => {
     let slow = async () => {
-        let {postAction, postOptimisticAction, rollback} = transaction(dispatch);
+        let transactionId = {};
 
-        let firstActual = {type: 'PUSH', value: 'slow actual 1'};
-        postAction(firstActual);
-        dispatch(firstActual);
+        dispatch(postAction({type: 'PUSH', value: 'slow actual 1'}));
 
-        let secondActual = {type: 'PUSH', value: 'slow actual 2'};
-        postAction(secondActual);
-        dispatch(secondActual);
+        dispatch(postAction({type: 'PUSH', value: 'slow actual 2'}));
 
-        let firstOptimistic = {type: 'PUSH', value: 'slow optimi 1'};
-        postOptimisticAction(firstOptimistic);
-        dispatch(firstOptimistic);
+        dispatch(postAction({type: 'PUSH', value: 'slow optimi 1'}, transactionId));
 
-        let secondOptimistic = {type: 'PUSH', value: 'slow optimi 2'};
-        postOptimisticAction(secondOptimistic);
-        dispatch(secondOptimistic);
+        dispatch(postAction({type: 'PUSH', value: 'slow optimi 2'}, transactionId));
 
         await delay(500);
 
-        rollback();
+        rollback(transactionId, dispatch);
 
-        let thirdActual = {type: 'PUSH', value: 'slow actual 3'};
-        postAction(thirdActual);
-        dispatch(thirdActual);
+        dispatch(postAction({type: 'PUSH', value: 'slow actual 3'}));
 
-        let fourthActual = {type: 'PUSH', value: 'slow actual 4'};
-        postAction(fourthActual);
-        dispatch(fourthActual);
+        dispatch(postAction({type: 'PUSH', value: 'slow actual 4'}));
     };
 
     let fast = async () => {
-        let {postAction, postOptimisticAction, rollback} = transaction(dispatch);
+        let transactionId = {};
 
-        let firstActual = {type: 'PUSH', value: 'fast actual 1'};
-        postAction(firstActual);
-        dispatch(firstActual);
+        dispatch(postAction({type: 'PUSH', value: 'fast actual 1'}));
 
-        let secondActual = {type: 'PUSH', value: 'fast actual 2'};
-        postAction(secondActual);
-        dispatch(secondActual);
+        dispatch(postAction({type: 'PUSH', value: 'fast actual 2'}));
 
-        let firstOptimistic = {type: 'PUSH', value: 'fast optimi 1'};
-        postOptimisticAction(firstOptimistic);
-        dispatch(firstOptimistic);
+        dispatch(postAction({type: 'PUSH', value: 'fast optimi 1'}, transactionId));
 
-        let secondOptimistic = {type: 'PUSH', value: 'fast optimi 2'};
-        postOptimisticAction(secondOptimistic);
-        dispatch(secondOptimistic);
+        dispatch(postAction({type: 'PUSH', value: 'fast optimi 2'}, transactionId));
 
         await delay(200);
 
-        rollback();
+        rollback(transactionId, dispatch);
 
-        let thirdActual = {type: 'PUSH', value: 'fast actual 3'};
-        postAction(thirdActual);
-        dispatch(thirdActual);
+        dispatch(postAction({type: 'PUSH', value: 'fast actual 3'}));
 
-        let fourthActual = {type: 'PUSH', value: 'fast actual 4'};
-        postAction(fourthActual);
-        dispatch(fourthActual);
+        dispatch(postAction({type: 'PUSH', value: 'fast actual 4'}));
     };
 
     slow();
