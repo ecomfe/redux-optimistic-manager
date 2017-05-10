@@ -122,6 +122,12 @@ export let createOptimisticManager = ({dispatch, getState}) => {
 };
 
 export let createOptimisticReducer = nextReducer => (state, action) => {
+    state = nextReducer(state, action);
+
+    if (!state) {
+        return state;
+    }
+
     if (state.optimistic === undefined) {
         state = {...state, optimistic: false};
     }
@@ -132,6 +138,6 @@ export let createOptimisticReducer = nextReducer => (state, action) => {
         case knownActionTypes.mark:
             return state.optimistic ? state : {...state, optimistic: true};
         default:
-            return nextReducer(state, action);
+            return state;
     }
 };

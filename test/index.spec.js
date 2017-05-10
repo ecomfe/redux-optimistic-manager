@@ -193,13 +193,26 @@ describe('createOptimisticReducer', () => {
     });
 
     it('should call next reducer on initialization', () => {
-        let nextReducer = sinon.spy();
+        let nextReducer = sinon.spy(i => i);
         let state = {x: 1};
         let action = {type: 'any'};
         let reducer = createOptimisticReducer(nextReducer);
         let value = reducer(state, action);
+        expect(value).to.deep.equal({x: 1, optimistic: false});
         expect(nextReducer.called).to.equal(true);
-        expect(nextReducer.firstCall.args[0]).to.deep.equal({optimistic: false, x: 1});
+        expect(nextReducer.firstCall.args[0]).to.deep.equal(state);
         expect(nextReducer.firstCall.args[1]).to.equal(action);
-    })
+    });
+
+    it('should work with null state', () => {
+        let nextReducer = sinon.spy(i => (i ? i : {}));
+        let state = {x: 1};
+        let action = {type: 'any'};
+        let reducer = createOptimisticReducer(nextReducer);
+        let value = reducer(state, action);
+        expect(value).to.deep.equal({x: 1, optimistic: false});
+        expect(nextReducer.called).to.equal(true);
+        expect(nextReducer.firstCall.args[0]).to.deep.equal(state);
+        expect(nextReducer.firstCall.args[1]).to.equal(action);
+    });
 });
