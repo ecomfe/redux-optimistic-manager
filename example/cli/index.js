@@ -1,4 +1,4 @@
-/* eslint-disable no-console, import/no-extraneous-dependencies */
+/* eslint-disable no-console */
 
 import {createStore, applyMiddleware} from 'redux';
 import chalk from 'chalk';

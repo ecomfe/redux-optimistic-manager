@@ -1,15 +1,14 @@
 {
     "env": {
         "production": {
-            "presets": [["env", {"modules": false}]],
-            "plugins": ["syntax-object-rest-spread"]
+            "presets": [["env", {"modules": false}], "stage-1"]
         },
         "test": {
-            "presets": ["env"],
-            "plugins": ["syntax-object-rest-spread", "istanbul"]
+            "presets": ["env", "stage-1"],
+            "plugins": ["istanbul"]
         },
         "example": {
-            "presets": ["syntax-object-rest-spread", "env"]
+            "presets": ["env", "stage-1"]
         }
     }
 }
