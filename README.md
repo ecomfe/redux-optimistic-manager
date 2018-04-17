@@ -68,3 +68,9 @@ Using redux-optimistic-manager is simple.
 
 - Simplified interfaces, now we need only `postAction` and `rollback` functions.
 - No longer manage transaction id, you should provide an unique `transactionId` to `postAction` and `rollback` function.
+
+### 3.0.0
+
+- Refreshed build with single rollup.
+- The es module version is now located at `dist/index.mjs`.
+- Add `"sideEffects": false` to `package.json`.

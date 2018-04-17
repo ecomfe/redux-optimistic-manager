@@ -1,18 +1,15 @@
 {
     "env": {
-        "development": {
-            "presets": ["es2015-rollup", "stage-3"]
-        },
         "production": {
-            "presets": ["es2015-rollup", "stage-3"]
+            "presets": [["env", {"modules": false}]],
+            "plugins": ["syntax-object-rest-spread"]
         },
         "test": {
-            "presets": ["stage-3"],
-            "plugins": ["transform-es2015-modules-umd", "istanbul"]
+            "presets": ["env"],
+            "plugins": ["syntax-object-rest-spread", "istanbul"]
         },
         "example": {
-            "presets": ["stage-3"],
-            "plugins": ["transform-es2015-modules-umd"]
+            "presets": ["syntax-object-rest-spread", "env"]
         }
     }
 }

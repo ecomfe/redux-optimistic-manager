@@ -1,21 +1,14 @@
-/**
- * redux-optimistic-manager
- *
- * @file entry point
- * @author otakustay
- */
+const toString = Object.prototype.toString;
 
-let toString = Object.prototype.toString;
-
-let knownActionTypes = {
+const knownActionTypes = {
     rollback: '@@optimistic/ROLLBACK',
-    mark: '@@optimistic/MARK'
+    mark: '@@optimistic/MARK',
 };
 
-let isKnownActionType = (() => {
+const isKnownActionType = (() => {
     /* eslint-disable fecs-use-for-of, fecs-valid-map-set */
-    let values = {};
-    for (let key in knownActionTypes) {
+    const values = {};
+    for (const key in knownActionTypes) {
         /* istanbul ignore else */
         if (knownActionTypes.hasOwnProperty(key)) {
             values[knownActionTypes[key]] = true;
@@ -26,27 +19,27 @@ let isKnownActionType = (() => {
     return type => values.hasOwnProperty(type);
 })();
 
-let isPlainAction = action => toString.call(action) === '[object Object]' && !isKnownActionType(action.type);
+const isPlainAction = action => toString.call(action) === '[object Object]' && !isKnownActionType(action.type);
 
-export let createOptimisticManager = ({dispatch, getState}) => {
+export const createOptimisticManager = ({dispatch, getState}) => {
     // The last save point to rollback to
     let savePoint = null;
     // All plain object actions dispatched after save point
     let dispatchedActions = [];
 
-    let saveActionOnDemand = (value, transactionId) => {
+    const saveActionOnDemand = (value, transactionId) => {
         if (savePoint) {
             dispatchedActions.push({value, transactionId});
         }
     };
 
-    let markStateOptimisticOnDemand = action => {
+    const markStateOptimisticOnDemand = () => {
         if (!getState().optimistic) {
             dispatch({type: knownActionTypes.mark});
         }
     };
 
-    let createSavePointOnDemand = () => {
+    const createSavePointOnDemand = () => {
         if (!savePoint) {
             savePoint = getState();
         }
@@ -83,16 +76,16 @@ export let createOptimisticManager = ({dispatch, getState}) => {
             dispatch({type: knownActionTypes.rollback, payload: savePoint});
 
             let newSavePoint = null;
-            let newDispatchedActions = [];
+            const newDispatchedActions = [];
 
             // Because we will dispatch previously saved actions, make a copy here to prevent infinite loops
-            for (let savedAction of dispatchedActions.slice()) {
+            for (const savedAction of dispatchedActions.slice()) {
                 // Ignore all optimistic actions produced by the same transaction
                 if (savedAction.transactionId === transactionId) {
                     continue;
                 }
 
-                let isOptimisticAction = savedAction.transactionId != null;
+                const isOptimisticAction = savedAction.transactionId != null;
 
                 // The next save point should be the first time an optimistic action is dispatched,
                 // so any actions earlier than new save point should be safe to discard
@@ -117,27 +110,31 @@ export let createOptimisticManager = ({dispatch, getState}) => {
 
             savePoint = newSavePoint;
             dispatchedActions = newDispatchedActions;
-        }
+        },
     };
 };
 
-export let createOptimisticReducer = nextReducer => (state, action) => {
-    state = nextReducer(state, action);
-
-    if (!state) {
-        return state;
+const recoverOptimisticMark = state => {
+    if (state && state.optimistic === undefined) {
+        return {...state, optimistic: false};
     }
 
-    if (state.optimistic === undefined) {
-        state = {...state, optimistic: false};
+    return state;
+};
+
+export const createOptimisticReducer = nextReducer => (state, action) => {
+    const nextState = recoverOptimisticMark(nextReducer(state, action));
+
+    if (!nextState) {
+        return nextState;
     }
 
     switch (action.type) {
         case knownActionTypes.rollback:
             return action.payload;
         case knownActionTypes.mark:
-            return state.optimistic ? state : {...state, optimistic: true};
+            return nextState.optimistic ? nextState : {...nextState, optimistic: true};
         default:
-            return state;
+            return nextState;
     }
 };
