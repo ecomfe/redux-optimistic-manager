@@ -181,9 +181,20 @@ describe('createOptimisticReducer', () => {
         expect(value).to.equal(state);
     });
 
-    it('should call next reducer for unknown action type', () => {
+    it('should call next reducer for unknown action type with optimistic mark removed', () => {
         const nextReducer = sinon.spy();
         const state = {optimistic: false};
+        const action = {type: 'any'};
+        const reducer = createOptimisticReducer(nextReducer);
+        reducer(state, action);
+        expect(nextReducer.called).to.equal(true);
+        expect(nextReducer.firstCall.args[0]).to.deep.equal({});
+        expect(nextReducer.firstCall.args[1]).to.equal(action);
+    });
+
+    it('should call next reducer with identical input state when no optimistic mark', () => {
+        const nextReducer = sinon.spy();
+        const state = {x: 1};
         const action = {type: 'any'};
         const reducer = createOptimisticReducer(nextReducer);
         reducer(state, action);
@@ -204,15 +215,24 @@ describe('createOptimisticReducer', () => {
         expect(nextReducer.firstCall.args[1]).to.equal(action);
     });
 
-    it('should work with null state', () => {
-        const nextReducer = sinon.spy(i => (i ? i : {}));
-        const state = {x: 1};
+    it('should keep state with optimistic mark identical if nextReducer keeps it identical', () => {
+        const nextReducer = sinon.spy(i => i);
+        const state = {x: 1, optimistic: false};
         const action = {type: 'any'};
         const reducer = createOptimisticReducer(nextReducer);
         const value = reducer(state, action);
-        expect(value).to.deep.equal({x: 1, optimistic: false});
+        expect(value).to.equal(state);
+    });
+
+    it('should work with null state', () => {
+        const nextReducer = sinon.spy(i => i);
+        const state = null;
+        const action = {type: 'any'};
+        const reducer = createOptimisticReducer(nextReducer);
+        const value = reducer(state, action);
+        expect(value).to.equal(null);
         expect(nextReducer.called).to.equal(true);
-        expect(nextReducer.firstCall.args[0]).to.deep.equal(state);
+        expect(nextReducer.firstCall.args[0]).to.equal(state);
         expect(nextReducer.firstCall.args[1]).to.equal(action);
     });
 });

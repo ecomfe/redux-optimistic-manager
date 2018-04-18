@@ -114,27 +114,43 @@ export const createOptimisticManager = ({dispatch, getState}) => {
     };
 };
 
-const recoverOptimisticMark = state => {
-    if (state && state.optimistic === undefined) {
-        return {...state, optimistic: false};
+const extractOptimisticMark = state => {
+    if (!state || state.optimistic === undefined) {
+        return [false, state];
     }
 
-    return state;
+    const {optimistic, ...appState} = state;
+    return [optimistic, appState];
 };
 
-export const createOptimisticReducer = nextReducer => (state, action) => {
-    const nextState = recoverOptimisticMark(nextReducer(state, action));
+const recoverOptimisticMark = (inputState, previousState, nextState, optimistic) => {
+    if (inputState.optimistic === optimistic && previousState === nextState) {
+        return inputState;
+    }
 
-    if (!nextState) {
+    return {...nextState, optimistic};
+};
+
+export const createOptimisticReducer = nextReducer => (inputState, action) => {
+    if (action.type === knownActionTypes.rollback) {
+        return action.payload;
+    }
+
+    // When `nextReducer` is created from `combineReducers`,
+    // the `optimistic` mark we added to state will raise a warning in console,
+    // so we should remove the mark before `nextReducer` is called
+    const [optimistic, previousState] = extractOptimisticMark(inputState);
+    const nextState = nextReducer(previousState, action);
+
+    // If `nextReducer` returns `null` or non object, we should not add optimistic mark on it
+    if (typeof nextState !== 'object' || nextState === null) {
         return nextState;
     }
 
-    switch (action.type) {
-        case knownActionTypes.rollback:
-            return action.payload;
-        case knownActionTypes.mark:
-            return nextState.optimistic ? nextState : {...nextState, optimistic: true};
-        default:
-            return nextState;
-    }
+    return recoverOptimisticMark(
+        inputState,
+        previousState,
+        nextState,
+        action.type === knownActionTypes.mark ? true : optimistic
+    );
 };
